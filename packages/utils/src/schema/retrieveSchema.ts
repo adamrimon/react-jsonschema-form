@@ -371,7 +371,7 @@ export function resolveAllReferences<S extends StrictRJSFSchema = RJSFSchema>(
     recurseList.push($ref!);
     // Retrieve the referenced schema definition.
     const refSchema = findSchemaDefinition<S>($ref, rootSchema, baseURI);
-    resolvedSchema = { ...refSchema, ...localSchema };
+    resolvedSchema = { ...refSchema, ...localSchema, [REF_KEY]: $ref };
     if (ID_KEY in resolvedSchema) {
       baseURI = resolvedSchema[ID_KEY];
     }
