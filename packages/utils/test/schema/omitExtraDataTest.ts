@@ -112,6 +112,42 @@ export default function omitExtraDataTest(testValidator: TestValidatorType) {
         expect(fieldNames.sort()).toEqual([['level1', 'level2'], 'level1.mixedMap', ['level1a']].sort());
       });
 
+      it('should return all field names when root pathSchema has additionalProperties', () => {
+        const formData = {
+          key1: 'val1',
+          key2: 'val2',
+        };
+
+        const pathSchema = {
+          [NAME_KEY]: '',
+          [RJSF_ADDITIONAL_PROPERTIES_FLAG]: true,
+        };
+
+        const fieldNames = getFieldNames(pathSchema as unknown as PathSchema, formData);
+        expect(fieldNames.sort()).toEqual([['key1'], ['key2']].sort());
+      });
+
+      it('should return defined property paths and additional property keys when root has both', () => {
+        const formData = {
+          config: { name: 'test', extraField: 'extra' },
+          dynamicKey: 'val',
+        };
+
+        const pathSchema = {
+          [NAME_KEY]: '',
+          [RJSF_ADDITIONAL_PROPERTIES_FLAG]: true,
+          config: {
+            [NAME_KEY]: 'config',
+            name: {
+              [NAME_KEY]: 'config.name',
+            },
+          },
+        };
+
+        const fieldNames = getFieldNames(pathSchema as unknown as PathSchema, formData);
+        expect(fieldNames.sort()).toEqual([['config', 'name'], ['dynamicKey']].sort());
+      });
+
       it('should get field names from pathSchema with array', () => {
         const formData = {
           address_list: [
@@ -309,6 +345,72 @@ export default function omitExtraDataTest(testValidator: TestValidatorType) {
       const schemaUtils = createSchemaUtils(testValidator, schema);
 
       expect(schemaUtils.omitExtraData(schema, formData)).toEqual(formData);
+    });
+
+    it('should not omit additional properties when root schema has additionalProperties', () => {
+      const schema: RJSFSchema = {
+        type: 'object',
+        additionalProperties: {
+          type: 'string',
+        },
+      };
+      const formData = {
+        key1: 'val1',
+        key2: 'val2',
+      };
+      const schemaUtils = createSchemaUtils(testValidator, schema);
+
+      expect(schemaUtils.omitExtraData(schema, formData)).toEqual(formData);
+    });
+
+    it('should not omit additional properties within oneOf', () => {
+      const schema: RJSFSchema = {
+        oneOf: [
+          {
+            type: 'object',
+            additionalProperties: {
+              type: 'string',
+            },
+          },
+        ],
+      };
+      const formData = {
+        key1: 'val1',
+        key2: 'val2',
+      };
+      const schemaUtils = createSchemaUtils(testValidator, schema);
+
+      expect(schemaUtils.omitExtraData(schema, formData)).toEqual(formData);
+    });
+
+    it('should keep additional properties but strip extras from defined properties within oneOf', () => {
+      const schema: RJSFSchema = {
+        oneOf: [
+          {
+            type: 'object',
+            properties: {
+              config: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string' },
+                },
+              },
+            },
+            additionalProperties: true,
+          },
+        ],
+      };
+      const formData = {
+        config: { name: 'test', extraField: 'should be stripped' },
+        dynamicKey: 'should be kept',
+      };
+      const expectedFormData = {
+        config: { name: 'test' },
+        dynamicKey: 'should be kept',
+      };
+      const schemaUtils = createSchemaUtils(testValidator, schema);
+
+      expect(schemaUtils.omitExtraData(schema, formData)).toEqual(expectedFormData);
     });
 
     it('No form data or RootSchema returns empty object', () => {

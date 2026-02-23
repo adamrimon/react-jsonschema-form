@@ -65,7 +65,24 @@ export function getFieldNames<T = any>(pathSchema: PathSchema<T>, formData?: T):
     return acc;
   };
 
-  return getAllPaths(pathSchema);
+  const result = getAllPaths(pathSchema);
+
+  // When the root pathSchema allows additionalProperties, include any formData keys
+  // not already covered by defined properties in the pathSchema
+  if ((pathSchema as GenericObjectType)[RJSF_ADDITIONAL_PROPERTIES_FLAG]) {
+    const coveredKeys = new Set(
+      result.map((fieldPath) =>
+        Array.isArray(fieldPath) ? fieldPath[0] : (fieldPath as unknown as string).split('.')[0],
+      ),
+    );
+    Object.keys((formData ?? {}) as GenericObjectType).forEach((key) => {
+      if (!coveredKeys.has(key)) {
+        result.push([key]);
+      }
+    });
+  }
+
+  return result;
 }
 
 /** Takes a `schema` and `formData` and returns a copy of the formData with any fields not defined in the schema removed.
