@@ -16,11 +16,19 @@ should change the heading of the (upcoming) version to include a major version b
 
 -->
 
-# 6.3.2
+# 6.4.0
+
+## @rjsf/utils
+
+- Added support for map-based `ui:enumNames` and `ui:enumOrder` for controlling enum display labels and ordering, fixing [#4969](https://github.com/rjsf-team/react-jsonschema-form/issues/4969)
 
 ## @rjsf/core
 
 - Updated multi-select ArrayFields to properly use the `items` uiSchema for enumerated options, fixing [#4955](https://github.com/rjsf-team/react-jsonschema-form/issues/4955)
+
+## Dev / docs / playground
+
+- Added documentation and playground examples for map-based `ui:enumNames` and `ui:enumOrder`
 
 # 6.3.1
 
