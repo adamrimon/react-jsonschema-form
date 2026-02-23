@@ -112,42 +112,6 @@ export default function omitExtraDataTest(testValidator: TestValidatorType) {
         expect(fieldNames.sort()).toEqual([['level1', 'level2'], 'level1.mixedMap', ['level1a']].sort());
       });
 
-      it('should return all field names when root pathSchema has additionalProperties', () => {
-        const formData = {
-          key1: 'val1',
-          key2: 'val2',
-        };
-
-        const pathSchema = {
-          [NAME_KEY]: '',
-          [RJSF_ADDITIONAL_PROPERTIES_FLAG]: true,
-        };
-
-        const fieldNames = getFieldNames(pathSchema as unknown as PathSchema, formData);
-        expect(fieldNames.sort()).toEqual([['key1'], ['key2']].sort());
-      });
-
-      it('should return defined property paths and additional property keys when root has both', () => {
-        const formData = {
-          config: { name: 'test', extraField: 'extra' },
-          dynamicKey: 'val',
-        };
-
-        const pathSchema = {
-          [NAME_KEY]: '',
-          [RJSF_ADDITIONAL_PROPERTIES_FLAG]: true,
-          config: {
-            [NAME_KEY]: 'config',
-            name: {
-              [NAME_KEY]: 'config.name',
-            },
-          },
-        };
-
-        const fieldNames = getFieldNames(pathSchema as unknown as PathSchema, formData);
-        expect(fieldNames.sort()).toEqual([['config', 'name'], ['dynamicKey']].sort());
-      });
-
       it('should get field names from pathSchema with array', () => {
         const formData = {
           address_list: [
@@ -407,6 +371,34 @@ export default function omitExtraDataTest(testValidator: TestValidatorType) {
       const expectedFormData = {
         config: { name: 'test' },
         dynamicKey: 'should be kept',
+      };
+      const schemaUtils = createSchemaUtils(testValidator, schema);
+
+      expect(schemaUtils.omitExtraData(schema, formData)).toEqual(expectedFormData);
+    });
+
+    it('should strip extras from within additional property values with strict schemas', () => {
+      const schema: RJSFSchema = {
+        oneOf: [
+          {
+            type: 'object',
+            additionalProperties: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+              },
+              additionalProperties: false,
+            },
+          },
+        ],
+      };
+      const formData = {
+        server1: { name: 'prod', secret: 'oops' },
+        server2: { name: 'staging' },
+      };
+      const expectedFormData = {
+        server1: { name: 'prod' },
+        server2: { name: 'staging' },
       };
       const schemaUtils = createSchemaUtils(testValidator, schema);
 
