@@ -21,7 +21,7 @@ import {
 } from '@rjsf/utils';
 import validator, { customizeValidator } from '@rjsf/validator-ajv8';
 
-import Form, { FormProps, IChangeEvent } from '../src';
+import Form, { FormProps, IChangeEvent, FormHandle } from '../src';
 import {
   createComponent,
   createFormComponent,
@@ -1271,8 +1271,8 @@ describeRepeated('Form common', (createFormComponent) => {
       });
 
       expect(formData).toEqual({ foo: 'bar2', baz: 'blah2' });
-      // There will be 3 ids, undefined for the setting of the defaults and then the two updated components
-      expect(ids).toEqual([undefined, 'root_foo', 'root_baz']);
+      // There will be 3 ids: the two updated components then undefined (functional component's useEffect fires initial onChange after child effects)
+      expect(ids).toEqual(['root_foo', 'root_baz', undefined]);
     });
     it('should modify an allOf field when the defaults are set', () => {
       const schema: RJSFSchema = {
@@ -3978,7 +3978,8 @@ describe('Form omitExtraData and liveOmit', () => {
     };
     const omitExtraData = true;
     const liveOmit = true;
-    const ref = createRef<Form>();
+    const ref = createRef<FormHandle>();
+    const onChange = jest.fn();
 
     const { node } = createFormComponent({
       ref,
@@ -3986,15 +3987,19 @@ describe('Form omitExtraData and liveOmit', () => {
       formData,
       omitExtraData,
       liveOmit,
+      onChange,
     });
-
-    const theSpy = jest.spyOn(ref.current!, 'omitExtraData').mockReturnValue({ foo: '' });
 
     fireEvent.change(node.querySelector('[type=text]')!, {
       target: { value: 'new' },
     });
 
-    expect(theSpy).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        formData: { foo: 'new' },
+      }),
+      'root_foo',
+    );
   });
 
   it('should not call omitExtraData when the omitExtraData prop is true and liveOmit is unspecified', () => {
@@ -4006,25 +4011,26 @@ describe('Form omitExtraData and liveOmit', () => {
         },
       },
     };
-    const formData = {
-      foo: 'bar',
-    };
+    const formData = { foo: 'bar', baz: 'extra' };
     const omitExtraData = true;
-    const ref = createRef<Form>();
+    const onChange = jest.fn();
     const { node } = createFormComponent({
-      ref,
       schema,
       formData,
       omitExtraData,
+      onChange,
     });
-
-    const theSpy = jest.spyOn(ref.current!, 'omitExtraData').mockReturnValue({ foo: '' });
 
     fireEvent.change(node.querySelector('[type=text]')!, {
       target: { value: 'new' },
     });
 
-    expect(theSpy).not.toHaveBeenCalled();
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        formData: { foo: 'new', baz: 'extra' },
+      }),
+      'root_foo',
+    );
   });
 
   it('should not omit data on change with omitExtraData=false and liveOmit=false', () => {
@@ -4325,7 +4331,7 @@ describe('Form omitExtraData and liveOmit', () => {
 
     const onSubmit = jest.fn();
 
-    const formRef = createRef<Form>();
+    const formRef = createRef<FormHandle>();
     const props: NoValFormProps = {
       ref: formRef,
       schema,
@@ -4353,35 +4359,36 @@ describe('Form omitExtraData and liveOmit', () => {
 });
 
 describe('omitExtraData on submit', () => {
-  it('should call omitExtraData when the omitExtraData prop is true', () => {
+  it('should call omitExtraData when the omitExtraData prop is true', async () => {
     const schema: RJSFSchema = {
       type: 'object',
       properties: {
-        foo: {
-          type: 'string',
-        },
+        foo: { type: 'string' },
       },
     };
-    const formData = {
-      foo: '',
-    };
+    const formData = { foo: 'valid', baz: 'extra' };
     const omitExtraData = true;
-    const ref = createRef<Form>();
+    const onSubmit = jest.fn();
     const { node } = createFormComponent({
-      ref,
       schema,
       formData,
       omitExtraData,
+      onSubmit,
     });
 
-    const theSpy = jest.spyOn(ref.current!, 'omitExtraData').mockReturnValue({ foo: '' });
+    await act(async () => {
+      fireEvent.submit(node);
+    });
 
-    fireEvent.submit(node);
-
-    expect(theSpy).toHaveBeenCalledTimes(1);
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        formData: { foo: 'valid' },
+      }),
+      expect.anything(),
+    );
   });
 
-  it('Should call validateFormWithFormData with the current formData if omitExtraData is false', () => {
+  it('Should call validateFormWithFormData with the current formData if omitExtraData is false', async () => {
     const omitExtraData = false;
     const schema: RJSFSchema = {
       type: 'object',
@@ -4390,20 +4397,23 @@ describe('omitExtraData on submit', () => {
       },
     };
     const formData = { foo: 'bar', baz: 'baz' };
-    const formRef = createRef<Form>();
-    const props: NoValFormProps = {
-      ref: formRef,
+    const onSubmit = jest.fn();
+    const { node } = createFormComponent({
       schema,
       formData,
-      omitExtraData: omitExtraData,
-    };
-    const { node } = createFormComponent(props);
-    const theSpy = jest.spyOn(formRef.current!, 'validateFormWithFormData').mockReturnValue(true);
-    fireEvent.submit(node);
-    expect(theSpy).toHaveBeenCalledWith(formData);
+      omitExtraData,
+      onSubmit,
+    });
+    await act(async () => {
+      fireEvent.submit(node);
+    });
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ formData: { foo: 'bar', baz: 'baz' } }),
+      expect.anything(),
+    );
   });
 
-  it('Should call validateFormWithFormData with a new formData with only used fields if omitExtraData is true', () => {
+  it('Should call validateFormWithFormData with a new formData with only used fields if omitExtraData is true', async () => {
     const omitExtraData = true;
     const schema: RJSFSchema = {
       type: 'object',
@@ -4412,17 +4422,17 @@ describe('omitExtraData on submit', () => {
       },
     };
     const formData = { foo: 'bar', baz: 'baz' };
-    const formRef = createRef<Form>();
-    const props: NoValFormProps = {
-      ref: formRef,
+    const onSubmit = jest.fn();
+    const { node } = createFormComponent({
       schema,
       formData,
-      omitExtraData: omitExtraData,
-    };
-    const { node } = createFormComponent(props);
-    const theSpy = jest.spyOn(formRef.current!, 'validateFormWithFormData').mockReturnValue(true);
-    fireEvent.submit(node);
-    expect(theSpy).toHaveBeenCalledWith({ foo: 'bar' });
+      omitExtraData,
+      onSubmit,
+    });
+    await act(async () => {
+      fireEvent.submit(node);
+    });
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ formData: { foo: 'bar' } }), expect.anything());
   });
 });
 
@@ -4490,14 +4500,14 @@ describe('Async errors', () => {
       },
     } as unknown as ErrorSchema;
 
-    const formRef = createRef<Form>();
+    const formRef = createRef<FormHandle>();
     const props: NoValFormProps = {
       ref: formRef,
       schema,
       noValidate: true,
     };
 
-    const { rerender } = createFormComponent({
+    const { rerender, node } = createFormComponent({
       ...props,
       extraErrors,
     });
@@ -4507,8 +4517,7 @@ describe('Async errors', () => {
       extraErrors: {},
     });
 
-    expect(formRef.current!.state.errorSchema).toEqual({});
-    expect(formRef.current!.state.errors).toEqual([]);
+    expect(node.querySelectorAll('.error-detail')).toHaveLength(0);
   });
 
   it('should reset when props extraErrors changes and liveValidate is false', () => {
@@ -4525,13 +4534,13 @@ describe('Async errors', () => {
       },
     } as unknown as ErrorSchema;
 
-    const formRef = createRef<Form>();
+    const formRef = createRef<FormHandle>();
     const props: NoValFormProps = {
       ref: formRef,
       schema,
       liveValidate: false,
     };
-    const { rerender } = createFormComponent({
+    const { rerender, node } = createFormComponent({
       ...props,
       extraErrors,
     });
@@ -4541,11 +4550,10 @@ describe('Async errors', () => {
       extraErrors: {},
     });
 
-    expect(formRef.current!.state.errorSchema).toEqual({});
-    expect(formRef.current!.state.errors).toEqual([]);
+    expect(node.querySelectorAll('.error-detail')).toHaveLength(0);
   });
 
-  it('should reset when schema changes', () => {
+  it('should reset when schema changes', async () => {
     const schema: RJSFSchema = {
       type: 'object',
       properties: {
@@ -4554,7 +4562,7 @@ describe('Async errors', () => {
       required: ['foo'],
     };
 
-    const formRef = createRef<Form>();
+    const formRef = createRef<FormHandle>();
     const { rerender, node } = createFormComponent({
       ref: formRef,
       schema,
@@ -4564,20 +4572,9 @@ describe('Async errors', () => {
       fireEvent.submit(node);
     });
 
-    expect(formRef.current!.state.errorSchema).toEqual({ foo: { __errors: ["must have required property 'foo'"] } });
-    expect(formRef.current!.state.errors).toEqual([
-      {
-        message: "must have required property 'foo'",
-        property: 'foo',
-        name: 'required',
-        params: {
-          missingProperty: 'foo',
-        },
-        schemaPath: '#/required',
-        stack: "must have required property 'foo'",
-        title: '',
-      },
-    ]);
+    expect(formRef.current!.validateForm()).toBe(false);
+    expect(node.querySelectorAll('.error-detail li')).toHaveLength(1);
+    expect(node.querySelector('.error-detail')).toHaveTextContent("must have required property 'foo'");
 
     // Changing schema to reset errors state.
     rerender({
@@ -4589,8 +4586,12 @@ describe('Async errors', () => {
         },
       },
     });
-    expect(formRef.current!.state.errorSchema).toEqual({});
-    expect(formRef.current!.state.errors).toEqual([]);
+    await waitFor(() => {
+      expect(formRef.current!.validateForm()).toBe(true);
+    });
+    await waitFor(() => {
+      expect(node.querySelectorAll('.error-detail')).toHaveLength(0);
+    });
   });
 });
 
@@ -4658,7 +4659,7 @@ describe('Calling reset from ref object', () => {
       title: 'Test form',
       type: 'string',
     };
-    const formRef = createRef<Form>();
+    const formRef = createRef<FormHandle>();
     const props: NoValFormProps = {
       ref: formRef,
       schema,
@@ -4678,7 +4679,7 @@ describe('Calling reset from ref object', () => {
       title: 'Test form',
       type: 'number',
     };
-    const formRef = createRef<Form>();
+    const formRef = createRef<FormHandle>();
     const props: NoValFormProps = {
       ref: formRef,
       schema,
@@ -4687,18 +4688,18 @@ describe('Calling reset from ref object', () => {
     expect(formRef.current!.reset).toBeDefined();
     expect(node.querySelector<HTMLInputElement>('input')).toBeInTheDocument();
     fireEvent.change(node.querySelector<HTMLInputElement>('input')!, { target: { value: 'Some Value' } });
-    expect(formRef.current!.state.errors).toHaveLength(0);
+    expect(node.querySelectorAll('.error-detail')).toHaveLength(0);
     act(() => {
       fireEvent.submit(node);
     });
-    expect(formRef.current!.state.errors).toHaveLength(1);
+    expect(node.querySelectorAll('.error-detail li')).toHaveLength(1);
     expect(node.querySelector('.errors')).toBeInTheDocument();
     act(() => {
       formRef.current!.reset();
     });
     expect(node.querySelector('.errors')).not.toBeInTheDocument();
     expect(node.querySelector<HTMLInputElement>('input')).toHaveAttribute('value', '');
-    expect(formRef.current!.state.errors).toHaveLength(0);
+    expect(node.querySelectorAll('.error-detail')).toHaveLength(0);
   });
 
   it('Reset button test with default value', () => {
@@ -4707,7 +4708,7 @@ describe('Calling reset from ref object', () => {
       type: 'string',
       default: 'Some-Value',
     };
-    const formRef = createRef<Form>();
+    const formRef = createRef<FormHandle>();
     const props: NoValFormProps = {
       ref: formRef,
       schema: schemaWithDefault,
@@ -4730,7 +4731,7 @@ describe('Calling reset from ref object', () => {
 
   it('Reset button test with complex schema', () => {
     const schema = widgetsSchema as RJSFSchema;
-    const formRef = createRef<Form>();
+    const formRef = createRef<FormHandle>();
     const props: NoValFormProps = {
       ref: formRef,
       schema,
@@ -4764,7 +4765,7 @@ describe('Calling reset from ref object', () => {
       title: 'Test form',
       type: 'string',
     };
-    const formRef = createRef<Form>();
+    const formRef = createRef<FormHandle>();
     const props: NoValFormProps = {
       ref: formRef,
       initialFormData: 'foo',
@@ -4792,9 +4793,10 @@ describe('validateForm()', () => {
       properties: {
         foo: { type: 'string' },
       },
+      additionalProperties: false,
     };
     const formData = { foo: 'bar', baz: 'baz' };
-    const formRef = createRef<Form>();
+    const formRef = createRef<FormHandle>();
     const props: NoValFormProps = {
       ref: formRef,
       schema,
@@ -4802,11 +4804,11 @@ describe('validateForm()', () => {
       omitExtraData: omitExtraData,
     };
     createFormComponent(props);
-    const theSpy = jest.spyOn(formRef.current!, 'validateFormWithFormData').mockReturnValue(true);
+    let result!: boolean;
     act(() => {
-      formRef.current!.validateForm();
+      result = formRef.current!.validateForm();
     });
-    expect(theSpy).toHaveBeenCalledWith(formData);
+    expect(result).toBe(false);
   });
 
   it('Should call validateFormWithFormData with a new formData with only used fields if omitExtraData is true', () => {
@@ -4816,9 +4818,10 @@ describe('validateForm()', () => {
       properties: {
         foo: { type: 'string' },
       },
+      additionalProperties: false,
     };
     const formData = { foo: 'bar', baz: 'baz' };
-    const formRef = createRef<Form>();
+    const formRef = createRef<FormHandle>();
     const props: NoValFormProps = {
       ref: formRef,
       schema,
@@ -4826,15 +4829,15 @@ describe('validateForm()', () => {
       omitExtraData: omitExtraData,
     };
     createFormComponent(props);
-    const theSpy = jest.spyOn(formRef.current!, 'validateFormWithFormData').mockReturnValue(true);
+    let result!: boolean;
     act(() => {
-      formRef.current!.validateForm();
+      result = formRef.current!.validateForm();
     });
-    expect(theSpy).toHaveBeenCalledWith({ foo: 'bar' });
+    expect(result).toBe(true);
   });
 
   it('Should update state when data updated from invalid to valid', () => {
-    const ref = createRef<Form>();
+    const ref = createRef<FormHandle>();
     const props: NoValFormProps = {
       schema: {
         type: 'object',
@@ -4881,7 +4884,7 @@ describe('validateForm()', () => {
 
 describe('setFieldValue()', () => {
   it('Sets root to value using ""', () => {
-    const ref = createRef<Form>();
+    const ref = createRef<FormHandle>();
     const props: NoValFormProps = {
       schema: {
         type: 'string',
@@ -4905,7 +4908,7 @@ describe('setFieldValue()', () => {
     expect(node.querySelector<HTMLInputElement>('input')).toHaveAttribute('value', 'populated value');
   });
   it('Sets root to value using []', () => {
-    const ref = createRef<Form>();
+    const ref = createRef<FormHandle>();
     const props: NoValFormProps = {
       schema: {
         type: 'string',
@@ -4929,7 +4932,7 @@ describe('setFieldValue()', () => {
     expect(node.querySelector<HTMLInputElement>('input')).toHaveAttribute('value', 'populated value');
   });
   it('Sets field to new value via dotted path', () => {
-    const ref = createRef<Form>();
+    const ref = createRef<FormHandle>();
     const props: NoValFormProps = {
       schema: {
         type: 'object',
@@ -4983,7 +4986,7 @@ describe('setFieldValue()', () => {
     expect(errors).toHaveLength(0);
   });
   it('Sets field to new value via field path list', () => {
-    const ref = createRef<Form>();
+    const ref = createRef<FormHandle>();
     const props: NoValFormProps = {
       schema: {
         type: 'object',
@@ -5743,7 +5746,7 @@ describe('extraErrors set after submit (#4965)', () => {
       foo: { __errors: ['Server-side error'] },
     } as unknown as ErrorSchema;
 
-    const formRef = createRef<Form>();
+    const formRef = createRef<FormHandle>();
 
     function Wrapper() {
       const [extraErrors, setExtraErrors] = useState<ErrorSchema>({} as ErrorSchema);
@@ -5768,12 +5771,6 @@ describe('extraErrors set after submit (#4965)', () => {
       await new Promise((r) => setTimeout(r, 200));
     });
 
-    // Check the form state directly
-    const state = formRef.current!.state;
-    expect(state.errors.length).toBeGreaterThan(0);
-    expect(state.errorSchema).toEqual(sampleErrors);
-
-    // Also check DOM
     const errorItems = container.querySelectorAll('.error-detail li');
     expect(errorItems.length).toBeGreaterThan(0);
   });

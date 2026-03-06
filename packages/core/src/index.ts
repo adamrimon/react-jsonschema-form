@@ -1,4 +1,4 @@
-import Form, { FormProps, FormState, IChangeEvent } from './components/Form';
+import Form, { FormProps, FormState, FormHandle, IChangeEvent } from './components/Form';
 import RichDescription, { RichDescriptionProps } from './components/RichDescription';
 import RichHelp, { RichHelpProps } from './components/RichHelp';
 import SchemaExamples, { SchemaExamplesProps } from './components/SchemaExamples';
@@ -8,7 +8,9 @@ import getTestRegistry from './getTestRegistry';
 
 export type {
   FormProps,
+  /** @deprecated FormState is no longer accessible via ref. Use FormHandle for ref methods. */
   FormState,
+  FormHandle,
   IChangeEvent,
   ThemeProps,
   RichDescriptionProps,
