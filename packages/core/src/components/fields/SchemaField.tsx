@@ -1,7 +1,8 @@
-import { useCallback, Component, ComponentType } from 'react';
+import { memo, useCallback, ComponentType } from 'react';
 import {
   ADDITIONAL_PROPERTY_FLAG,
   ANY_OF_KEY,
+  deepEquals,
   descriptionId,
   ErrorSchema,
   Field,
@@ -19,7 +20,7 @@ import {
   Registry,
   resolveUiSchema,
   RJSFSchema,
-  shouldRender,
+  shallowEquals,
   shouldRenderOptionalField,
   StrictRJSFSchema,
   toFieldPathId,
@@ -318,21 +319,15 @@ function SchemaFieldRender<T = any, S extends StrictRJSFSchema = RJSFSchema, F e
 /** The `SchemaField` component determines whether it is necessary to rerender the component based on any props changes
  * and if so, calls the `SchemaFieldRender` component with the props.
  */
-class SchemaField<T = any, S extends StrictRJSFSchema = RJSFSchema, F extends FormContextType = any> extends Component<
-  FieldProps<T, S, F>
-> {
-  shouldComponentUpdate(nextProps: Readonly<FieldProps<T, S, F>>) {
-    const {
-      registry: { globalFormOptions },
-    } = this.props;
-    const { experimental_componentUpdateStrategy = 'customDeep' } = globalFormOptions;
-
-    return shouldRender(this, nextProps, this.state, experimental_componentUpdateStrategy);
+const SchemaField = memo(SchemaFieldRender, (prevProps, nextProps) => {
+  const { experimental_componentUpdateStrategy = 'customDeep' } = prevProps.registry.globalFormOptions;
+  if (experimental_componentUpdateStrategy === 'always') {
+    return false;
   }
-
-  render() {
-    return <SchemaFieldRender<T, S, F> {...this.props} />;
+  if (experimental_componentUpdateStrategy === 'shallow') {
+    return shallowEquals(prevProps, nextProps);
   }
-}
+  return deepEquals(prevProps, nextProps);
+}) as typeof SchemaFieldRender;
 
 export default SchemaField;
