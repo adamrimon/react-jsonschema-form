@@ -16,6 +16,20 @@ should change the heading of the (upcoming) version to include a major version b
 
 -->
 
+# 6.4.2
+
+## @rjsf/core
+
+- Removed `expandUiSchemaDefinitions` call at form init, now handled at runtime by `resolveUiSchema`, fixing [#4986](https://github.com/rjsf-team/react-jsonschema-form/issues/4986)
+
+## @rjsf/utils
+
+- Fixed `ui:title` from `ui:definitions` not applied to `oneOf`/`anyOf` dropdowns beyond first recursion level, fixing [#4986](https://github.com/rjsf-team/react-jsonschema-form/issues/4986)
+
+## Dev / docs / playground
+
+- Updated References playground sample to demonstrate `oneOf` with `ui:title` at recursive depth, related to [#4986](https://github.com/rjsf-team/react-jsonschema-form/issues/4986)
+
 # 6.4.1
 
 ## Dev / docs / playground
